@@ -214,7 +214,7 @@ function doPost(e) {
 **Giriş (Input):**
 
 ```http
-POST https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
+POST https://script.google.com/macros/s/<AKfycbyimdB4kT1aootSm5nPfA0sIIn3HufaSnKbWh7NLmS4oJoTRGszKjweyxK0XqZCOdir>/exec
 Content-Type: application/json
 
 {
@@ -522,7 +522,7 @@ doPost(e)
 ### 5.3 Test Komutu — cURL
 
 ```bash
-curl -L -X POST "https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec" \
+curl -L -X POST "https://script.google.com/macros/s/AKfycbyimdB4kT1aootSm5nPfA0sIIn3HufaSnKbWh7NLmS4oJoTRGszKjweyxK0XqZCOdir/exec" \
   -H "Content-Type: application/json" \
   -d '{
     "name":    "Ayşe Kara",
@@ -542,7 +542,7 @@ $body = @{
     message = "Yazılımınızın kurumsal lisans fiyatını öğrenmek istiyorum."
 } | ConvertTo-Json -Compress
 
-Invoke-RestMethod -Uri "https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec" `
+Invoke-RestMethod -Uri "https://script.google.com/macros/s/<AKfycbyimdB4kT1aootSm5nPfA0sIIn3HufaSnKbWh7NLmS4oJoTRGszKjweyxK0XqZCOdir>/exec" `
     -Method POST `
     -ContentType "application/json" `
     -Body $body
@@ -552,7 +552,7 @@ Invoke-RestMethod -Uri "https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec"
 
 ```
 Method  : POST
-URL     : https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
+URL     : https://script.google.com/macros/s/<AKfycbyimdB4kT1aootSm5nPfA0sIIn3HufaSnKbWh7NLmS4oJoTRGszKjweyxK0XqZCOdir>/exec
 
 Headers :
   Key             Value
