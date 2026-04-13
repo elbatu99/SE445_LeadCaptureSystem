@@ -400,3 +400,19 @@ function testDoPost() {
   console.log("Response:", result.getContent());
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 5 — TARAYICI KARŞILAMA (doGet)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tarayıcıdan URL'ye doğrudan girildiğinde çalışır (GET isteği).
+ * Hata vermesini engeller ve ziyaretçiye bilgilendirme yapar.
+ */
+function doGet(e) {
+  return ContentService.createTextOutput(
+    "✅ SE 445 Lead Capture System aktif ve dinlemede.\n\n" +
+    "Sistem Notu: Bu bir Webhook uç noktasıdır. Veri göndermek için lütfen " +
+    "application/json formatında bir HTTP POST isteği gönderiniz."
+  );
+}
+
