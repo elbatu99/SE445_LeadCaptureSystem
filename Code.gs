@@ -1,13 +1,14 @@
 // =============================================================================
 // SE 445 — Lead Capture System
-// HW3: Logic & Intelligent Processing — Google Apps Script Implementation
+// Final Project: Complete Lead Capture Pipeline with Auto-Email Responder
 // =============================================================================
 //
-// PIPELINE (4-Step):
+// PIPELINE (5-Step):
 //   ① Webhook Trigger   — doPost(e) receives HTTP POST
 //   ② Validation Logic  — _validatePayload() checks empty fields + email regex
 //   ③ AI Agent          — _classifyIntent() calls Gemini for intent & urgency
-//   ④ Google Sheets     — _appendLeadToSheet() writes all 10 columns
+//   ④ Action            — _takeAction() sends auto-reply email to valid leads
+//   ⑤ Google Sheets     — _appendLeadToSheet() writes all 10 columns
 //
 // DEPLOYMENT:
 //   1. Create a new Google Spreadsheet named "SE445_LeadCaptureDB"
@@ -117,7 +118,8 @@ const CONFIG = {
  *   2. Validate fields → { is_valid, validation_reason }
  *   3. Classify intent/urgency via Gemini → { intent, urgency }
  *   4. Generate AI greeting via Gemini → ai_response
- *   5. Append all 10 columns to Google Sheets
+ *   5. Take Action — send auto-reply email to valid leads (Final)
+ *   6. Append all 10 columns to Google Sheets
  *
  * @param  {Object} e  The event object provided by Apps Script.
  *                     e.postData.contents holds the raw JSON string.
@@ -145,18 +147,28 @@ function doPost(e) {
       // Pipeline continues with fallback values — no record is dropped
     }
 
-    // ── Step 4a — AI Greeting via Gemini (HW1 — retained) ──
-    let greeting = "";
-    try {
-      greeting = _generateGreeting(payload);
-    } catch (greetingError) {
-      console.error("Greeting generation failed:", greetingError.message);
-      greeting = "(Greeting generation failed)";
-    }
+    // ── Step 4 — AI Greeting via Gemini (HW1 — retained) ──
+    // ── Step 4 — AI Greeting via Gemini (HW1 — retained) ──
+    let greeting = "";
+    try {
+      greeting = _generateGreeting(payload);
+    } catch (greetingError) {
+      console.error("Greeting generation failed:", greetingError.message);
+      // YEDEK (FALLBACK) MEKANİZMASI: API çökerse sistem şık bir mesajla çalışmaya devam eder!
+      greeting = "Merhaba " + (payload.name || "Değerli Müşterimiz") + ",\n\n" +
+                 "Bize ulaştığınız için teşekkür ederiz. Talebinizi aldık ve kayıtlarımıza işledik. " +
+                 "Ekiplerimiz konuyu inceliyor, size en kısa sürede dönüş yapacağız.\n\n" +
+                 "Saygılarımızla,\nSatış ve Destek Ekibi";
+    }
 
-    // ── Step 4b — Persist to Google Sheets (all 10 columns) ──
+    // ── Step 5 — Action: Auto-Email Responder (Final) ──
+    const actionStatus = _takeAction(payload, validation, greeting);
+
+    // ── Step 6 — Persist to Google Sheets (all 10 columns) ──
     const timestamp = new Date().toISOString();
-    const rowIndex  = _appendLeadToSheet(timestamp, payload, validation, classification, greeting);
+    const rowIndex  = _appendLeadToSheet(
+      timestamp, payload, validation, classification, greeting, actionStatus
+    );
 
     // ── Success response ──
     return _jsonResponse(200, "success", "Lead captured and processed.", {
@@ -166,7 +178,8 @@ function doPost(e) {
       validation_reason: validation.validation_reason,
       intent:            classification.intent,
       urgency:           classification.urgency,
-      ai_response:       greeting
+      ai_response:       greeting,
+      action_taken:      actionStatus
     });
 
   } catch (error) {
@@ -431,23 +444,71 @@ function _generateGreeting(payload) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STEP 4b — GOOGLE SHEETS INTEGRATION (Append Row — ALL 10 COLUMNS)
+// STEP 5 — ACTION: AUTO-EMAIL RESPONDER (Final — NEW)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Takes action on the processed lead by sending an auto-reply email.
+ *
+ * Logic:
+ *   • If the lead is valid (validation.is_valid === true), send a confirmation
+ *     email to payload.email with the AI-generated greeting as the body.
+ *   • If the lead is invalid, skip the email and return an appropriate status.
+ *   • If MailApp.sendEmail() throws (e.g., quota exceeded, invalid recipient),
+ *     catch the error gracefully and return an error status.
+ *
+ * Uses Google's native MailApp.sendEmail() which sends from the script
+ * owner's Gmail account.  No OAuth scope beyond the default is required.
+ *
+ * @param  {Object} payload     Parsed payload { name, email, message }.
+ * @param  {Object} validation  { is_valid: boolean, validation_reason: string }
+ * @param  {string} greeting    AI-generated greeting to include as the email body.
+ * @return {string}             Status string for the Action_Taken column.
+ */
+function _takeAction(payload, validation, greeting) {
+  // ── Guard: skip email for invalid leads ──
+  if (validation.is_valid !== true) {
+    console.log("Action skipped — lead is invalid: " + validation.validation_reason);
+    return "Invalid - Skipped";
+  }
+
+  // ── Attempt to send the auto-reply email ──
+  try {
+    MailApp.sendEmail({
+      to:      payload.email,
+      subject: "Talebiniz Alındı / Request Received",
+      body:    greeting
+    });
+
+    console.log("Auto-reply email sent to: " + payload.email);
+    return "Email sent";
+
+  } catch (emailError) {
+    console.error("Email send failed for " + payload.email + ": " + emailError.message);
+    return "Email Error: " + emailError.message;
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 6 — GOOGLE SHEETS INTEGRATION (Append Row — ALL 10 COLUMNS)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Appends a new lead row to the "leads" sheet with ALL 10 columns populated.
  *
- * HW3 upgrade: Columns E–H are now filled with validation and classification
- * data instead of empty strings.
+ * Final upgrade: Column J (Action_Taken) is now filled with the action status
+ * returned by _takeAction() instead of an empty string.
  *
  * @param  {string} timestamp       ISO-8601 timestamp of ingestion.
  * @param  {Object} payload         Parsed payload { name, email, message }.
  * @param  {Object} validation      { is_valid, validation_reason }
  * @param  {Object} classification  { intent, urgency }
  * @param  {string} greeting        AI-generated greeting text.
+ * @param  {string} actionStatus    Status from _takeAction() (e.g., "Email sent").
  * @return {number}                 The 1-based row index of the newly appended row.
  */
-function _appendLeadToSheet(timestamp, payload, validation, classification, greeting) {
+function _appendLeadToSheet(timestamp, payload, validation, classification, greeting, actionStatus) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet()
                               .getSheetByName(CONFIG.SHEET_NAME);
 
@@ -468,15 +529,15 @@ function _appendLeadToSheet(timestamp, payload, validation, classification, gree
     validation.validation_reason,    // F — Validation_Reason (HW3)
     classification.intent,           // G — Intent            (HW3)
     classification.urgency,          // H — Urgency           (HW3)
-    greeting,                        // I — AI_Response       (HW1, filled inline)
-    ""                               // J — Action_Taken      (Final)
+    greeting,                        // I — AI_Response       (HW1)
+    actionStatus                     // J — Action_Taken      (Final)
   ];
 
   sheet.appendRow(row);
 
   // Return the row number that was just written
   const lastRow = sheet.getLastRow();
-  console.log("Lead appended to row " + lastRow);
+  console.log("Lead appended to row " + lastRow + " | Action: " + actionStatus);
   return lastRow;
 }
 
@@ -601,7 +662,7 @@ function testDoPost_ValidInput() {
     postData: {
       contents: JSON.stringify({
         name:    "Batuhan Yeşilyurt",
-        email:   "batuhan@softwareco.com",
+        email:   "elbatu1999@gmail.com",
         message: "We are evaluating your platform for our 200-person sales team. Could we arrange an enterprise demo this week?"
       }),
       type: "application/json"
